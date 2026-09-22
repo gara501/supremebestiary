@@ -108,6 +108,17 @@ export default defineType({
     }),
 
     defineField({
+      name: 'testimonyAudio',
+      title: 'Witness audio testimony',
+      type: 'file',
+      options: {
+        accept: 'audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/webm',
+      },
+      description:
+        'Optional short field recording for this exact sighting. Keep clips concise; use a streaming service for long-form recordings.',
+    }),
+
+    defineField({
       name: 'observedTraits',
       title: 'Traits observed in this sighting',
       type: 'array',

@@ -11,6 +11,11 @@ interface EnrichedSighting {
   credibilityIndex: number | null
   status: string
   freeformDescription: string
+  testimonyAudio?: {
+    url?: string
+    originalFilename?: string
+    mimeType?: string
+  } | null
   creature: {
     name: string
     threatLevel: string
@@ -29,6 +34,7 @@ const SIGHTING_PROJECTION = `{
   credibilityIndex,
   status,
   freeformDescription,
+  "testimonyAudio": testimonyAudio.asset->{url, originalFilename, mimeType},
   "creature": creature->{name, threatLevel, physicalDescription, distinctiveTraits, folkloreOrigin, "imageUrl": archiveIllustration.asset->url},
   "region": region->{name, country, folkloreHistory}
 }`
@@ -58,6 +64,8 @@ function buildMarkerIcon(sighting: EnrichedSighting, sequence = 0): L.DivIcon {
     html: `
       <span class="sighting-marker" style="--signal:${color};--size:${size}px;--delay:${-(sequence % 7) * 0.37}s;width:${size}px;height:${size}px;">
         <span class="sighting-marker__halo"></span>
+        <span class="sighting-marker__ring sighting-marker__ring--outer"></span>
+        <span class="sighting-marker__ring sighting-marker__ring--inner"></span>
         <span class="sighting-marker__pulse"></span>
         <span class="sighting-marker__core"></span>
         <span class="sighting-marker__glint"></span>
@@ -406,6 +414,16 @@ export default function BestiaryMap() {
               </div>
             ) : null}
             <blockquote>“{selectedSighting.freeformDescription}”</blockquote>
+            {selectedSighting.testimonyAudio?.url && (
+              <section className="creature-dossier__testimony" aria-label="Witness audio testimony">
+                <p><span aria-hidden="true">◉</span> Recovered witness recording</p>
+                <audio controls preload="metadata">
+                  <source src={selectedSighting.testimonyAudio.url} type={selectedSighting.testimonyAudio.mimeType} />
+                  Your browser does not support audio playback.
+                </audio>
+                {selectedSighting.testimonyAudio.originalFilename && <small>{selectedSighting.testimonyAudio.originalFilename}</small>}
+              </section>
+            )}
             {selectedSighting.creature?.folkloreOrigin && <p className="creature-dossier__origin">Archive note: {selectedSighting.creature.folkloreOrigin}</p>}
           </div>
         </aside>
