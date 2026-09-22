@@ -78,6 +78,7 @@ export default function SightingForm() {
   const [moonPhase, setMoonPhase] = useState<MoonPhase>('unknown')
   const [weather, setWeather] = useState<Weather>('clear')
   const [visibility, setVisibility] = useState<Visibility>('good')
+  const [testimonyAudio, setTestimonyAudio] = useState<File | null>(null)
 
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<SubmitResult | null>(null)
@@ -149,26 +150,30 @@ export default function SightingForm() {
 
     setSubmitting(true)
     try {
+      const payload = {
+        creatureId,
+        regionId,
+        location: {lat: parseFloat(lat), lng: parseFloat(lng)},
+        witness: {
+          anonymous,
+          name: anonymous ? undefined : witnessName,
+          occupation,
+          baseCredibility,
+          witnessState,
+        },
+        date: new Date(date).toISOString(),
+        timeOfDay,
+        freeformDescription,
+        observedTraits,
+        environmentalConditions: {moonPhase, weather, visibility},
+      }
+      const formData = new FormData()
+      formData.set('payload', JSON.stringify(payload))
+      if (testimonyAudio) formData.set('testimonyAudio', testimonyAudio)
+
       const response = await fetch('/api/submit-sighting', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          creatureId,
-          regionId,
-          location: {lat: parseFloat(lat), lng: parseFloat(lng)},
-          witness: {
-            anonymous,
-            name: anonymous ? undefined : witnessName,
-            occupation,
-            baseCredibility,
-            witnessState,
-          },
-          date: new Date(date).toISOString(),
-          timeOfDay,
-          freeformDescription,
-          observedTraits,
-          environmentalConditions: {moonPhase, weather, visibility},
-        }),
+        body: formData,
       })
 
       const data = await response.json()
@@ -180,6 +185,7 @@ export default function SightingForm() {
       setResult(data as SubmitResult)
       setFreeformDescription('')
       setObservedTraits([])
+      setTestimonyAudio(null)
       redirectTimerRef.current = window.setTimeout(() => {
         window.location.assign(`/map?report=${encodeURIComponent(data.sightingId)}&signal=received`)
       }, 1350)
@@ -306,6 +312,28 @@ export default function SightingForm() {
           value={freeformDescription}
           onChange={(e) => setFreeformDescription(e.target.value)}
         />
+      </div>
+
+      <div className="dossier__field">
+        <label className="dossier__label" htmlFor="testimonyAudio">
+          Witness recording <span className="dossier__optional">optional</span>
+        </label>
+        <label className={`dossier__audio-upload ${testimonyAudio ? 'dossier__audio-upload--selected' : ''}`} htmlFor="testimonyAudio">
+          <span className="dossier__audio-upload-sigil" aria-hidden="true">◉</span>
+          <span>
+            <strong>{testimonyAudio ? testimonyAudio.name : 'Attach a field recording'}</strong>
+            <small>{testimonyAudio ? `${Math.ceil(testimonyAudio.size / 1024)} KB · ready for archive` : 'MP3, WAV, OGG, M4A, or WebM · up to 8 MB'}</small>
+          </span>
+          {testimonyAudio && <em>Replace</em>}
+        </label>
+        <input
+          id="testimonyAudio"
+          className="dossier__audio-input"
+          type="file"
+          accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/webm,.mp3,.wav,.ogg,.m4a,.webm"
+          onChange={(event) => setTestimonyAudio(event.target.files?.[0] ?? null)}
+        />
+        <p className="dossier__hint">A short spoken account gives this exact signal a playable testimony in the map dossier.</p>
       </div>
 
       <div className="dossier__field">

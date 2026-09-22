@@ -380,6 +380,9 @@ export default function BestiaryMap() {
         {isScanning ? 'Triangulating…' : 'Locate signals'}
       </button>
       <div className="bestiary-map__explore-controls">
+        <a className="bestiary-map__report-link" href="/report">
+          <span aria-hidden="true">✎</span> Report an encounter
+        </a>
         <button type="button" className="bestiary-map__explore" onClick={discoverRandomSignal}>
           <span>✦</span> Random transmission
         </button>

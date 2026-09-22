@@ -27,9 +27,25 @@ interface SubmitBody {
   }
 }
 
+const MAX_AUDIO_BYTES = 8 * 1024 * 1024
+const ALLOWED_AUDIO_TYPES = new Set([
+  'audio/mpeg',
+  'audio/wav',
+  'audio/ogg',
+  'audio/mp4',
+  'audio/webm',
+])
+
 export const POST: APIRoute = async ({request}) => {
   try {
-    const body: SubmitBody = await request.json()
+    const formData = await request.formData()
+    const rawPayload = formData.get('payload')
+    if (typeof rawPayload !== 'string') {
+      return new Response(JSON.stringify({error: 'Missing report payload'}), {status: 400})
+    }
+    const body: SubmitBody = JSON.parse(rawPayload)
+    const audioEntry = formData.get('testimonyAudio')
+    const testimonyAudio = audioEntry && typeof audioEntry !== 'string' ? audioEntry : null
 
     if (!body.creatureId || !body.regionId || !body.location || !body.freeformDescription) {
       return new Response(
@@ -37,6 +53,20 @@ export const POST: APIRoute = async ({request}) => {
         {status: 400},
       )
     }
+
+    if (testimonyAudio && (!ALLOWED_AUDIO_TYPES.has(testimonyAudio.type) || testimonyAudio.size > MAX_AUDIO_BYTES)) {
+      return new Response(
+        JSON.stringify({error: 'Audio must be MP3, WAV, OGG, M4A, or WebM and no larger than 8 MB.'}),
+        {status: 400},
+      )
+    }
+
+    const audioAsset = testimonyAudio
+      ? await sanityWriteClient.assets.upload('file', Buffer.from(await testimonyAudio.arrayBuffer()), {
+          filename: testimonyAudio.name,
+          contentType: testimonyAudio.type,
+        })
+      : null
 
     // 1. Create the sighting document, status starts as "pending"
     const created = await sanityWriteClient.create({
@@ -54,6 +84,9 @@ export const POST: APIRoute = async ({request}) => {
       date: body.date,
       timeOfDay: body.timeOfDay,
       freeformDescription: body.freeformDescription,
+      testimonyAudio: audioAsset
+        ? {_type: 'file', asset: {_type: 'reference', _ref: audioAsset._id}}
+        : undefined,
       observedTraits: body.observedTraits ?? [],
       environmentalConditions: body.environmentalConditions ?? {},
       status: 'pending',
