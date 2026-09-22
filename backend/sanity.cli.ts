@@ -7,6 +7,7 @@ export default defineCliConfig({
     dataset: 'bestiary'
   },
   deployment: {
+    appId: 'hkqiu9qqfzd1drij9wjg9vot',
     /**
      * Enable auto-updates for studios.
      * Learn more at https://www.sanity.io/docs/studio/latest-version-of-sanity#k47faf43faf56
