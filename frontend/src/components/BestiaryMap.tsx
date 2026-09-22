@@ -1,8 +1,6 @@
 import {useEffect, useRef, useState} from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import 'maplibre-gl/dist/maplibre-gl.css'
-import '@maplibre/maplibre-gl-leaflet' // side-effect import: adds L.maplibreGL(...)
 import {sanityClient} from '../lib/sanity'
 import './BestiaryMap.css'
 
@@ -13,8 +11,15 @@ interface EnrichedSighting {
   credibilityIndex: number | null
   status: string
   freeformDescription: string
-  creature: {name: string; threatLevel: string} | null
-  region: {name: string} | null
+  creature: {
+    name: string
+    threatLevel: string
+    physicalDescription?: string
+    distinctiveTraits?: string[]
+    folkloreOrigin?: string
+    imageUrl?: string
+  } | null
+  region: {name: string; country?: string; folkloreHistory?: string} | null
 }
 
 const SIGHTING_PROJECTION = `{
@@ -24,8 +29,8 @@ const SIGHTING_PROJECTION = `{
   credibilityIndex,
   status,
   freeformDescription,
-  "creature": creature->{name, threatLevel},
-  "region": region->{name}
+  "creature": creature->{name, threatLevel, physicalDescription, distinctiveTraits, folkloreOrigin, "imageUrl": archiveIllustration.asset->url},
+  "region": region->{name, country, folkloreHistory}
 }`
 
 /** Color scale for credibility: low = red, mid = amber, high = phosphor green. */
@@ -85,14 +90,30 @@ function escapeHtml(str: string): string {
   return div.innerHTML
 }
 
+function formatDate(value: string): string {
+  return value ? new Date(value).toLocaleDateString(undefined, {year: 'numeric', month: 'long', day: 'numeric'}) : 'Unknown date'
+}
+
+function threatLabel(level?: string): string {
+  return ({harmless: 'Harmless', caution: 'Caution advised', dangerous: 'High threat', unknown: 'Unclassified'}[level ?? 'unknown'] ?? 'Unclassified')
+}
+
+type Receiver = {context: AudioContext; nodes: AudioNode[]}
+
 export default function BestiaryMap() {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const markersRef = useRef<Map<string, L.Marker>>(new Map())
+  const sightingsRef = useRef<Map<string, EnrichedSighting>>(new Map())
   const coordinateReadoutRef = useRef<HTMLSpanElement>(null)
+  const receiverRef = useRef<Receiver | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'live'>('connecting')
   const [sightingCount, setSightingCount] = useState(0)
   const [isScanning, setIsScanning] = useState(false)
+  const [mapLoadState, setMapLoadState] = useState<'loading' | 'ready' | 'unavailable'>('loading')
+  const [selectedSighting, setSelectedSighting] = useState<EnrichedSighting | null>(null)
+  const [illustrationLoading, setIllustrationLoading] = useState(false)
+  const [receiverOn, setReceiverOn] = useState(false)
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
@@ -103,14 +124,21 @@ export default function BestiaryMap() {
       zoomControl: true,
     })
 
-    // OpenFreeMap: free vector tiles, no API key, no usage limits.
-    // (L.maplibreGL comes from the '@maplibre/maplibre-gl-leaflet' side-effect import above.)
-    ;(L as any)
-      .maplibreGL({
-        style: 'https://tiles.openfreemap.org/styles/dark',
-        attribution: '&copy; OpenStreetMap contributors &copy; OpenFreeMap',
+    // Direct OSM tiles are deliberately used instead of the remote vector-style service.
+    // The latter can be blocked by content filters, leaving signals over an empty canvas.
+    const baseLayer = L
+      .tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
+        maxZoom: 19,
+        crossOrigin: true,
+        updateWhenIdle: true,
       })
       .addTo(map)
+
+    baseLayer.once('load', () => setMapLoadState('ready'))
+    const loadTimeout = window.setTimeout(() => {
+      setMapLoadState((state) => (state === 'loading' ? 'unavailable' : state))
+    }, 9000)
 
     mapRef.current = map
 
@@ -122,10 +150,18 @@ export default function BestiaryMap() {
     })
 
     return () => {
+      window.clearTimeout(loadTimeout)
+      receiverRef.current?.context.close()
       map.remove()
       mapRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    markersRef.current.forEach((marker, id) => {
+      marker.getElement()?.querySelector('.sighting-marker')?.classList.toggle('sighting-marker--selected', id === selectedSighting?._id)
+    })
+  }, [selectedSighting])
 
   useEffect(() => {
     let isMounted = true
@@ -133,6 +169,7 @@ export default function BestiaryMap() {
     function upsertMarker(sighting: EnrichedSighting) {
       const map = mapRef.current
       if (!map || !sighting.location) return
+      sightingsRef.current.set(sighting._id, sighting)
 
       const existing = markersRef.current.get(sighting._id)
       if (existing) {
@@ -145,6 +182,7 @@ export default function BestiaryMap() {
         })
           .addTo(map)
           .bindPopup(popupHtml(sighting))
+        marker.on('click', () => focusSighting(sighting))
         markersRef.current.set(sighting._id, marker)
       }
     }
@@ -154,6 +192,7 @@ export default function BestiaryMap() {
       if (marker) {
         marker.remove()
         markersRef.current.delete(id)
+        sightingsRef.current.delete(id)
       }
     }
 
@@ -207,6 +246,29 @@ export default function BestiaryMap() {
     }
   }, [])
 
+  function chirp() {
+    const receiver = receiverRef.current
+    if (!receiver) return
+    const oscillator = receiver.context.createOscillator()
+    const gain = receiver.context.createGain()
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(420, receiver.context.currentTime)
+    oscillator.frequency.exponentialRampToValueAtTime(740, receiver.context.currentTime + 0.16)
+    gain.gain.setValueAtTime(0.0001, receiver.context.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.035, receiver.context.currentTime + 0.025)
+    gain.gain.exponentialRampToValueAtTime(0.0001, receiver.context.currentTime + 0.23)
+    oscillator.connect(gain).connect(receiver.context.destination)
+    oscillator.start()
+    oscillator.stop(receiver.context.currentTime + 0.25)
+  }
+
+  function focusSighting(sighting: EnrichedSighting) {
+    setIllustrationLoading(Boolean(sighting.creature?.imageUrl))
+    setSelectedSighting(sighting)
+    mapRef.current?.flyTo([sighting.location.lat, sighting.location.lng], Math.max(mapRef.current.getZoom(), 4), {duration: 1.25})
+    chirp()
+  }
+
   function scanForSignals() {
     const map = mapRef.current
     const markers = [...markersRef.current.values()]
@@ -218,9 +280,56 @@ export default function BestiaryMap() {
     window.setTimeout(() => setIsScanning(false), 1800)
   }
 
+  function discoverRandomSignal() {
+    const sightings = [...sightingsRef.current.values()]
+    if (sightings.length === 0) return
+    focusSighting(sightings[Math.floor(Math.random() * sightings.length)])
+  }
+
+  function toggleReceiver() {
+    if (receiverRef.current) {
+      receiverRef.current.context.close()
+      receiverRef.current = null
+      setReceiverOn(false)
+      return
+    }
+
+    const context = new AudioContext()
+    const master = context.createGain()
+    master.gain.value = 0.018
+    master.connect(context.destination)
+    const low = context.createOscillator()
+    const high = context.createOscillator()
+    const wobble = context.createOscillator()
+    const wobbleGain = context.createGain()
+    low.type = 'sine'; low.frequency.value = 58
+    high.type = 'triangle'; high.frequency.value = 174
+    wobble.frequency.value = 0.08; wobbleGain.gain.value = 18
+    wobble.connect(wobbleGain).connect(high.frequency)
+    low.connect(master); high.connect(master)
+    low.start(); high.start(); wobble.start()
+    receiverRef.current = {context, nodes: [low, high, wobble, master]}
+    setReceiverOn(true)
+    chirp()
+  }
+
   return (
     <div className="bestiary-map-wrap">
       <div className="bestiary-map__atmosphere" aria-hidden="true" />
+      {mapLoadState !== 'ready' && (
+        <div className="bestiary-map__loader" role="status" aria-live="polite">
+          <div className="bestiary-map__loader-ring" aria-hidden="true"><span>✦</span></div>
+          <p className="bestiary-map__loader-kicker">Archive Cartography Division</p>
+          <p className="bestiary-map__loader-title">
+            {mapLoadState === 'loading' ? 'Tuning the field map' : 'Base map signal unavailable'}
+          </p>
+          <p className="bestiary-map__loader-copy">
+            {mapLoadState === 'loading'
+              ? 'Recovering contour lines, old roads, and unverified territories…'
+              : 'The sighting archive is still active. Check your connection, then reload the map.'}
+          </p>
+        </div>
+      )}
       <div className="bestiary-map__header">
         <p className="bestiary-map__eyebrow">Field Division · Restricted Cartography</p>
         <h1 className="bestiary-map__title">Apex Bestiary</h1>
@@ -249,6 +358,58 @@ export default function BestiaryMap() {
         <span className="bestiary-map__scan-icon">⌁</span>
         {isScanning ? 'Triangulating…' : 'Locate signals'}
       </button>
+      <div className="bestiary-map__explore-controls">
+        <button type="button" className="bestiary-map__explore" onClick={discoverRandomSignal}>
+          <span>✦</span> Random transmission
+        </button>
+        <button type="button" className={`bestiary-map__receiver ${receiverOn ? 'bestiary-map__receiver--on' : ''}`} onClick={toggleReceiver} aria-pressed={receiverOn}>
+          <span aria-hidden="true">⌁</span> Field receiver: {receiverOn ? 'on' : 'off'}
+        </button>
+      </div>
+
+      {selectedSighting && (
+        <aside className="creature-dossier" aria-label={`Dossier for ${selectedSighting.creature?.name ?? 'unclassified creature'}`}>
+          <button type="button" className="creature-dossier__close" onClick={() => setSelectedSighting(null)} aria-label="Close dossier">×</button>
+          <div className="creature-dossier__image-wrap">
+            {illustrationLoading && (
+              <div className="creature-dossier__revelation" role="status" aria-live="polite">
+                <span className="creature-dossier__revelation-sigil">✦</span>
+                <span>Developing archive plate</span>
+              </div>
+            )}
+            {selectedSighting.creature?.imageUrl ? (
+              <img
+                src={selectedSighting.creature.imageUrl}
+                alt={`Archive illustration of ${selectedSighting.creature.name}`}
+                className={`creature-dossier__image ${illustrationLoading ? 'creature-dossier__image--loading' : ''}`}
+                onLoad={() => setIllustrationLoading(false)}
+                onError={() => setIllustrationLoading(false)}
+              />
+            ) : (
+              <div className="creature-dossier__missing-image">?</div>
+            )}
+            <span className="creature-dossier__stamp">Case file open</span>
+          </div>
+          <div className="creature-dossier__body">
+            <p className="creature-dossier__eyebrow">{selectedSighting.region?.country ?? 'Global archive'} · {formatDate(selectedSighting.date)}</p>
+            <h2>{selectedSighting.creature?.name ?? 'Unclassified creature'}</h2>
+            <div className="creature-dossier__badges">
+              <span>{threatLabel(selectedSighting.creature?.threatLevel)}</span>
+              <span>Credibility {selectedSighting.credibilityIndex ?? '—'}%</span>
+            </div>
+            <p className="creature-dossier__location">Signal registered near <strong>{selectedSighting.region?.name ?? 'unknown region'}</strong></p>
+            {selectedSighting.creature?.physicalDescription && <p className="creature-dossier__description">{selectedSighting.creature.physicalDescription}</p>}
+            {selectedSighting.creature?.distinctiveTraits?.length ? (
+              <div className="creature-dossier__traits">
+                <p>Canonical signs</p>
+                {selectedSighting.creature.distinctiveTraits.slice(0, 5).map((trait) => <span key={trait}>{trait}</span>)}
+              </div>
+            ) : null}
+            <blockquote>“{selectedSighting.freeformDescription}”</blockquote>
+            {selectedSighting.creature?.folkloreOrigin && <p className="creature-dossier__origin">Archive note: {selectedSighting.creature.folkloreOrigin}</p>}
+          </div>
+        </aside>
+      )}
     </div>
   )
 }
