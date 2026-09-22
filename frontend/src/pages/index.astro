@@ -1,5 +1,5 @@
 ---
-
+import SightingForm from '../components/SightingForm'
 ---
 
 <html lang="en">
@@ -9,9 +9,9 @@
 		<link rel="icon" href="/favicon.ico" />
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
+		<title>Archive Central · Sighting Report</title>
 	</head>
 	<body>
-		<h1>Astro</h1>
+		<SightingForm client:load />
 	</body>
 </html>
