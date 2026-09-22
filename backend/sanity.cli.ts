@@ -1,6 +1,7 @@
 import {defineCliConfig} from 'sanity/cli'
 
 export default defineCliConfig({
+  studioHost: 'apex-bestiary',
   api: {
     projectId: 'en0s05um',
     dataset: 'bestiary'
