@@ -198,6 +198,9 @@ export default function SightingForm() {
 
   return (
     <form className="dossier" onSubmit={handleSubmit}>
+      <a className="dossier__map-return" href="/map">
+        <span aria-hidden="true">←</span> Return to live map
+      </a>
       <div className="dossier__redacted-bar" />
       <h2 className="dossier__title">Field Report — New Sighting</h2>
       <p className="dossier__subtitle">
