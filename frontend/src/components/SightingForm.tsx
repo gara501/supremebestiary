@@ -1,5 +1,6 @@
-import {useEffect, useState, type FormEvent, type KeyboardEvent} from 'react'
+import {useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent} from 'react'
 import {sanityClient} from '../lib/sanity'
+import LocationPickerMap, {type Coordinates} from './LocationPickerMap'
 import './SightingForm.css'
 
 interface OptionItem {
@@ -81,6 +82,22 @@ export default function SightingForm() {
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<SubmitResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const redirectTimerRef = useRef<number | null>(null)
+
+  const selectedCoordinates = (() => {
+    const parsedLat = Number.parseFloat(lat)
+    const parsedLng = Number.parseFloat(lng)
+    return Number.isFinite(parsedLat) && Number.isFinite(parsedLng) ? {lat: parsedLat, lng: parsedLng} : null
+  })()
+
+  const updateCoordinates = useCallback((coordinates: Coordinates) => {
+    setLat(String(coordinates.lat))
+    setLng(String(coordinates.lng))
+  }, [])
+
+  useEffect(() => () => {
+    if (redirectTimerRef.current) window.clearTimeout(redirectTimerRef.current)
+  }, [])
 
   useEffect(() => {
     async function loadOptions() {
@@ -163,6 +180,9 @@ export default function SightingForm() {
       setResult(data as SubmitResult)
       setFreeformDescription('')
       setObservedTraits([])
+      redirectTimerRef.current = window.setTimeout(() => {
+        window.location.assign(`/map?report=${encodeURIComponent(data.sightingId)}&signal=received`)
+      }, 1350)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong filing this report.')
     } finally {
@@ -221,6 +241,7 @@ export default function SightingForm() {
 
       <div className="dossier__field">
         <label className="dossier__label">Exact location</label>
+        <LocationPickerMap value={selectedCoordinates} onChange={updateCoordinates} />
         <div className="dossier__row">
           <input
             className="dossier__input"
@@ -239,7 +260,7 @@ export default function SightingForm() {
             onChange={(e) => setLng(e.target.value)}
           />
         </div>
-        <p className="dossier__hint">Use your phone's GPS coordinates, or drop a pin later in the map view.</p>
+        <p className="dossier__hint">Click the field map or enter GPS coordinates manually. This pin becomes the live archive signal.</p>
       </div>
 
       <div className="dossier__row">
@@ -418,9 +439,12 @@ export default function SightingForm() {
       </button>
 
       {result && (
-        <div className="dossier__status">
-          Report filed. Case ID <strong>{result.sightingId}</strong> — computed credibility index:{' '}
-          <strong>{result.credibilityIndex}</strong> / 100.
+        <div className="dossier__status dossier__status--received" role="status">
+          <span className="dossier__status-sigil" aria-hidden="true">⌁</span>
+          <div>
+            <strong>Transmission received.</strong> Case signal is being placed on the live map — credibility index:{' '}
+            <strong>{result.credibilityIndex}</strong> / 100.
+          </div>
         </div>
       )}
       {error && <div className="dossier__status dossier__status--error">{error}</div>}

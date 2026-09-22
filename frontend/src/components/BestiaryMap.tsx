@@ -120,6 +120,7 @@ export default function BestiaryMap() {
   const [isScanning, setIsScanning] = useState(false)
   const [mapLoadState, setMapLoadState] = useState<'loading' | 'ready' | 'unavailable'>('loading')
   const [selectedSighting, setSelectedSighting] = useState<EnrichedSighting | null>(null)
+  const [receivedSightingId, setReceivedSightingId] = useState<string | null>(null)
   const [illustrationLoading, setIllustrationLoading] = useState(false)
   const [receiverOn, setReceiverOn] = useState(false)
 
@@ -167,9 +168,11 @@ export default function BestiaryMap() {
 
   useEffect(() => {
     markersRef.current.forEach((marker, id) => {
-      marker.getElement()?.querySelector('.sighting-marker')?.classList.toggle('sighting-marker--selected', id === selectedSighting?._id)
+      const signal = marker.getElement()?.querySelector('.sighting-marker')
+      signal?.classList.toggle('sighting-marker--selected', id === selectedSighting?._id)
+      signal?.classList.toggle('sighting-marker--received', id === receivedSightingId)
     })
-  }, [selectedSighting])
+  }, [selectedSighting, receivedSightingId])
 
   useEffect(() => {
     let isMounted = true
@@ -206,12 +209,22 @@ export default function BestiaryMap() {
 
     async function loadInitialSightings() {
       try {
-        const sightings: EnrichedSighting[] = await sanityClient.fetch(
-          `*[_type == "sighting" && defined(location)] ${SIGHTING_PROJECTION}`,
-        )
+        const reportId = new URLSearchParams(window.location.search).get('report')
+        const filedReportPromise: Promise<EnrichedSighting | null> = reportId
+          ? sanityClient.fetch(`*[_id == $id][0] ${SIGHTING_PROJECTION}`, {id: reportId})
+          : Promise.resolve(null)
+        const [sightings, filedReport] = await Promise.all([
+          sanityClient.fetch<EnrichedSighting[]>(`*[_type == "sighting" && defined(location)] ${SIGHTING_PROJECTION}`),
+          filedReportPromise,
+        ])
         if (!isMounted) return
         console.log(`[BestiaryMap] loaded ${sightings.length} sightings`, sightings)
         sightings.forEach(upsertMarker)
+        if (filedReport?.location) {
+          upsertMarker(filedReport)
+          setReceivedSightingId(filedReport._id)
+          window.setTimeout(() => focusSighting(filedReport), 180)
+        }
         setSightingCount(sightings.length)
         setConnectionStatus('live')
       } catch (err) {
@@ -427,6 +440,13 @@ export default function BestiaryMap() {
             {selectedSighting.creature?.folkloreOrigin && <p className="creature-dossier__origin">Archive note: {selectedSighting.creature.folkloreOrigin}</p>}
           </div>
         </aside>
+      )}
+      {receivedSightingId && selectedSighting?._id === receivedSightingId && (
+        <div className="bestiary-map__arrival" role="status">
+          <span className="bestiary-map__arrival-sigil" aria-hidden="true">⌁</span>
+          <p><strong>New transmission decoded</strong><span>This signal is awaiting archive review.</span></p>
+          <button type="button" onClick={() => setReceivedSightingId(null)} aria-label="Dismiss new transmission notice">×</button>
+        </div>
       )}
     </div>
   )
