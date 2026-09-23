@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent} from 'react'
 import {sanityClient} from '../lib/sanity'
 import LocationPickerMap, {type Coordinates} from './LocationPickerMap'
+import SiteHeader from './SiteHeader'
 import './SightingForm.css'
 
 interface OptionItem {
@@ -197,6 +198,8 @@ export default function SightingForm() {
   }
 
   return (
+    <div className="report-page">
+    <SiteHeader active="report" />
     <form className="dossier" onSubmit={handleSubmit}>
       <a className="dossier__map-return" href="/map">
         <span aria-hidden="true">←</span> Return to live map
@@ -480,5 +483,6 @@ export default function SightingForm() {
       )}
       {error && <div className="dossier__status dossier__status--error">{error}</div>}
     </form>
+    </div>
   )
 }

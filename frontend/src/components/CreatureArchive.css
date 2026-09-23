@@ -22,3 +22,18 @@
 @media(max-width:1050px){.archive__evidence-grid{grid-template-columns:1fr}.archive__timeline{display:flex;overflow-x:auto;border-right:0;border-bottom:1px solid var(--rule);padding:.6rem;scrollbar-color:var(--rule) transparent}.archive__timeline:before{display:none}.archive__timeline-item{flex:0 0 min(260px,72vw);grid-template-columns:15px minmax(0,1fr);border:1px solid var(--rule);border-bottom:2px solid transparent;padding:.75rem}.archive__timeline-item+ .archive__timeline-item{border-left:0}.archive__timeline-item.is-active{border-bottom-color:var(--amber)}.archive__timeline-chevron{display:none}}
 @media(max-width:550px){.archive__investigation-heading{align-items:start;padding:1.7rem 1.25rem 1.15rem}.archive__investigation-heading h3{font-size:2rem}.archive__report-count{font-size:.44rem}.archive__evidence{padding:1.35rem 1.15rem 2rem}.archive__evidence-meta{grid-template-columns:1fr 1fr}.archive__evidence-meta>div:last-child{grid-column:1 / -1;border-top:1px solid var(--rule);border-left:0;padding:.7rem 0 0}.archive__comparison{padding:1rem}.archive__comparison li{grid-template-columns:17px minmax(0,1fr)}.archive__comparison li small{grid-column:2}}
 @media(prefers-reduced-motion:reduce){.archive *{animation-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* Reading scale across the archive; metadata stays secondary without becoming tiny. */
+.archive__eyebrow,.archive__index-heading span,.archive__profile-top,.archive__count,.archive__section-number,.archive__report-count,.archive__investigation-heading .archive__section-number{font-size:.74rem}
+.archive__lede{font-size:1rem;line-height:1.8}
+.archive__index-heading h2{font-size:2.35rem}.archive__search{height:47px}.archive__search input{font-size:.88rem}.archive__search kbd{font-size:.66rem}
+.archive__filters button{font-size:.68rem;padding:.43rem .53rem}.archive__list-copy strong{font-size:.91rem}.archive__list-copy small{font-size:.74rem}.archive__index-footer,.archive__message{font-size:.73rem}
+.archive__profile-top{padding:1.15rem 1.5rem}.archive__art-caption{font-size:.66rem}.archive__threat,.archive__hero-kicker{font-size:.71rem}
+.archive__hero-description{font-size:.94rem;line-height:1.8}.archive__hero-meta span{font-size:.7rem}.archive__hero-meta strong{font-size:.84rem}
+.archive__detail-block h3{font-size:2.1rem}.archive__detail-block p{font-size:.82rem}.archive__traits li,.archive__detail-block blockquote{font-size:.87rem}.archive__traits li span,.archive__classification{font-size:.69rem}
+.archive__investigation-heading p,.archive__reports-message,.archive__reports-empty p{font-size:.85rem}.archive__timeline-date{font-size:.72rem}.archive__timeline-date small{font-size:.64rem}.archive__timeline-copy strong{font-size:.92rem}.archive__timeline-excerpt{font-size:.78rem}
+.archive__evidence-top,.archive__evidence-meta span,.archive__comparison-heading,.archive__unlisted span{font-size:.71rem}.archive__evidence-meta strong{font-size:.83rem}.archive__evidence-meta .archive__credibility{font-size:.94rem}.archive__witness-account{font-size:.94rem}
+.archive__comparison>p,.archive__comparison li,.archive__unlisted p{font-size:.82rem}.archive__comparison li small{font-size:.65rem}.archive__comparison .archive__comparison-note{font-size:.73rem}.archive__map-link{font-size:.76rem}
+.archive__profile-bottom,.archive__footer,.archive__audio button{font-size:.7rem}.archive__music-credit{font-size:.68rem}
+@media(max-width:760px){.archive__profile-top{padding:1rem}.archive__art-caption{font-size:.55rem}.archive__filters button{font-size:.68rem}.archive__hero-description{font-size:.9rem}}
+@media(max-width:420px){.archive__profile-top{font-size:.65rem}.archive__report-count{font-size:.63rem}}

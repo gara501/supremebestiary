@@ -2,6 +2,7 @@ import {useEffect, useRef, useState} from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import {sanityClient} from '../lib/sanity'
+import SiteHeader from './SiteHeader'
 import './BestiaryMap.css'
 
 interface EnrichedSighting {
@@ -78,7 +79,7 @@ function buildMarkerIcon(sighting: EnrichedSighting, sequence = 0): L.DivIcon {
 function popupHtml(sighting: EnrichedSighting): string {
   const creatureName = sighting.creature?.name ?? 'Unclassified creature'
   const regionName = sighting.region?.name ?? 'Unknown region'
-  const dateFmt = sighting.date ? new Date(sighting.date).toLocaleDateString() : 'Unknown date'
+  const dateFmt = sighting.date ? new Date(sighting.date).toLocaleDateString('en-US') : 'Unknown date'
   const index = sighting.credibilityIndex ?? 'not yet scored'
   const account = sighting.freeformDescription?.slice(0, 220) ?? ''
 
@@ -100,7 +101,7 @@ function escapeHtml(str: string): string {
 }
 
 function formatDate(value: string): string {
-  return value ? new Date(value).toLocaleDateString(undefined, {year: 'numeric', month: 'long', day: 'numeric'}) : 'Unknown date'
+  return value ? new Date(value).toLocaleDateString('en-US', {year: 'numeric', month: 'long', day: 'numeric'}) : 'Unknown date'
 }
 
 function threatLabel(level?: string): string {
@@ -339,6 +340,7 @@ export default function BestiaryMap() {
 
   return (
     <div className="bestiary-map-wrap">
+      <SiteHeader active="map" overlay />
       <div className="bestiary-map__atmosphere" aria-hidden="true" />
       {mapLoadState !== 'ready' && (
         <div className="bestiary-map__loader" role="status" aria-live="polite">

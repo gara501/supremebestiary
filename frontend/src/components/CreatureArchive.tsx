@@ -1,5 +1,7 @@
 import {useEffect, useMemo, useRef, useState} from 'react'
 import {sanityClient} from '../lib/sanity'
+import SiteHeader from './SiteHeader'
+import ConnectionBoard from './ConnectionBoard'
 import './CreatureArchive.css'
 
 interface Creature {
@@ -14,7 +16,7 @@ interface Creature {
   regions?: {name: string; country?: string}[]
 }
 
-interface FieldSighting {
+export interface FieldSighting {
   _id: string
   creatureId: string
   date?: string
@@ -24,6 +26,7 @@ interface FieldSighting {
   freeformDescription?: string
   location?: {lat: number; lng: number}
   region?: {name: string; country?: string} | null
+  corroboratedBy?: {_ref: string}[]
 }
 
 const CREATURE_QUERY = `*[_type == "creature"] | order(name asc) {
@@ -34,7 +37,7 @@ const CREATURE_QUERY = `*[_type == "creature"] | order(name asc) {
 
 const SIGHTINGS_QUERY = `*[_type == "sighting" && defined(creature._ref)] | order(date desc) {
   _id, "creatureId": creature._ref, date, credibilityIndex, status,
-  observedTraits, freeformDescription, location,
+  observedTraits, freeformDescription, location, corroboratedBy[]{_ref},
   "region": region->{name, country}
 }`
 
@@ -195,6 +198,14 @@ export default function CreatureArchive() {
     chooseCreature(creatures[(selectedIndex + direction + creatures.length) % creatures.length]._id)
   }
 
+  function openConnectedReport(id: string) {
+    const report = sightings.find((item) => item._id === id)
+    if (!report) return
+    if (report.creatureId !== selected?._id) chooseCreature(report.creatureId)
+    setSelectedSightingId(id)
+    document.querySelector('.archive__investigation')?.scrollIntoView({behavior: 'smooth', block: 'start'})
+  }
+
   async function toggleMusic() {
     const audio = audioRef.current
     if (!audio) return
@@ -215,18 +226,7 @@ export default function CreatureArchive() {
   return (
     <main className="archive">
       <div className="archive__grain" aria-hidden="true" />
-      <header className="archive__header">
-        <a className="archive__brand" href="/map" aria-label="Apex Bestiary map">
-          <span className="archive__brand-mark" aria-hidden="true">✦</span>
-          <span>APEX <strong>BESTIARY</strong><small>ARCHIVE CENTRAL / FIELD DIVISION</small></span>
-        </a>
-        <nav className="archive__top-nav" aria-label="Main navigation">
-          <a href="/map">↖ &nbsp; Field map</a>
-          <span aria-current="page">Entity archive</span>
-          <a href="/report">Report a sighting &nbsp; ↗</a>
-        </nav>
-        <div className="archive__header-code">AB—00 / CLASSIFIED</div>
-      </header>
+      <SiteHeader active="bestiary" />
 
       <section className="archive__intro" aria-label="Archive introduction">
         <div className="archive__intro-copy">
@@ -311,6 +311,7 @@ export default function CreatureArchive() {
                 </div>
               </div>}
             </section>
+            {selectedSighting && <ConnectionBoard sighting={selectedSighting} sightings={sightings} creatureName={selected.name} onOpenSighting={openConnectedReport} />}
             <div className="archive__profile-bottom"><span>END OF FILE — {selected.name.toUpperCase()}</span><div><button type="button" onClick={() => stepCreature(-1)} aria-label="Previous entity">←</button><button type="button" onClick={() => stepCreature(1)} aria-label="Next entity">→</button></div></div>
           </> : <div className="archive__empty"><span>✦</span><h2>{status === 'loading' ? 'Opening the archive…' : 'No case files available'}</h2><p>{status === 'error' ? 'Please check the archive connection and try again.' : 'The next field report may reveal what is hidden.'}</p></div>}
         </article>

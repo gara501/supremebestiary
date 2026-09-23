@@ -2,56 +2,56 @@
 
 > A living archive of cryptid sightings, mapped as classified field intelligence.
 
-**[Explore the live map →](https://apex-bestiary.vercel.app/map)** · **[Submit a sighting →](https://apex-bestiary.vercel.app/)** · **[Open the Sanity Studio locally](#local-development)**
+**[Live field map](https://apex-bestiary.vercel.app/map)** · **[Entity archive](https://apex-bestiary.vercel.app/bestiary)** · **[File a report](https://apex-bestiary.vercel.app/report)** · **[Source code](https://github.com/gara501/supremebestiary)**
 
-Apex Bestiary turns folklore into an interactive investigation. Reports arrive as structured Sanity documents, appear on a real-time world map, and open into illustrated creature dossiers with field notes, canonical traits, threat classification, and a credibility signal.
+Apex Bestiary turns folklore into an interactive investigation. Sightings are structured Sanity documents that appear on a live world map and connect to illustrated entity profiles. The project was built for the [Sanity Challenge — Path Two: Vibe-code Something Strange](https://dev.to/challenges/sanity-2026-09-16).
 
-Built for the [Sanity Challenge — Path Two: Vibe-code Something Strange](https://dev.to/challenges/sanity-2026-09-16).
+This README describes the current repository. The hosted demo can lag until the latest changes are deployed.
 
-## What you can do
+## Explore the archive
 
-- Explore a dark field map with animated signals for sightings around the world.
-- Open a creature dossier directly from a signal, including the archive illustration and folklore context.
-- Browse the entity archive at `/bestiary`, inspect each creature's sighting timeline, compare reported traits with canonical signs, and jump to an exact signal on the map.
-- Use **Random transmission** to jump into an unexpected case file.
-- Turn on the optional **Field receiver** for a subtle, browser-generated ambient signal — no autoplay and no external audio file required.
-- Submit a new sighting from the public report form.
-- See new and updated reports appear live, without a page refresh.
+- **Field map (`/map`):** inspect animated sighting signals, open a dossier with the witness account and creature profile, jump to a random transmission, or use the optional synthesized Field receiver.
+- **Entity archive (`/bestiary`):** search and filter creature profiles; read descriptions, canonical traits, folklore origins, regions, and threat assessments; and turn on optional background music.
+- **Sighting timeline:** select an archived report, compare its observed traits with the entity's canonical traits, and locate its signal on the field map.
+- **Connection board:** follow explicit `corroboratedBy` references or review possible matches on a map. A possible match requires the same creature, at least one shared observed trait, and reports within **100 km** and **365 days**. These leads are labeled separately from archived links; they are not verified corroboration.
+- **Field report (`/report`, also available at `/`):** pick a location, describe an encounter, add observed traits and environmental conditions, and optionally attach an audio testimony of up to 8 MB. New reports enter the archive with a pending review status and a computed credibility index.
 
-## Why Sanity is at the center
+The shared navigation and larger type scale carry the same visual language across the map, archive, and report form. Interface labels and curated archive descriptions are in English; creature and place names retain their proper names.
 
-This is not a static map with hard-coded pins. The content model connects three kinds of documents:
+## Content model and live updates
 
 ```text
 Creature ── referenced by ──> Sighting <── references ── Region
+                                   │
+                                   └── corroboratedBy[] ──> Sighting
 ```
 
-| Document | What it models |
+| Document | Key fields |
 | --- | --- |
-| `creature` | Canonical and regional names, illustration, physical description, distinctive traits, folklore origin, and threat level. |
+| `creature` | Names, illustration, physical description, distinctive traits, folklore origin, and threat level. |
 | `region` | Country, map centroid, folklore history, and depth of oral tradition. |
-| `sighting` | Exact geopoint, witness account, observed traits, environmental conditions, corroborating reports, review status, and credibility index. |
+| `sighting` | Geopoint, witness account, optional testimony audio, observed traits, conditions, review status, credibility index, and references to corroborating reports. |
 
-The Astro frontend uses GROQ projections to resolve creature and region references for every map signal, then subscribes with Sanity's real-time listener so the archive remains live. The same structured model lets the dossier combine a report with its creature’s visual archive and cultural context.
+The Astro frontend uses GROQ projections to resolve creature and region references. Sanity listeners refresh the map and archive when sightings change. The server-side reporting route creates a sighting, calculates its credibility index, and writes that score back to Sanity. The connection board reads explicit references and computes its separate possible-match leads in the browser.
 
-**Sanity project ID:** `en0s05um`  
-**Dataset:** `bestiary`
+**Sanity project ID:** `en0s05um` · **Dataset:** `bestiary`
+
+## Audio
+
+The map's **Field receiver** is synthesized with Web Audio and starts only after a click. The entity archive has a separate, optional music control with no autoplay.
+
+Music track: **Abyss by Tetuano**. Source: [freetouse.com/music](https://freetouse.com/music). No Copyright Music (Free Download).
 
 ## Stack
 
-- [Astro](https://astro.build/) + React for the interactive frontend
-- [Sanity](https://www.sanity.io/) Content Lake and Studio for the archive
-- [Leaflet](https://leafletjs.com/) + [OpenStreetMap](https://www.openstreetmap.org/) for cartography
-- [Vercel](https://vercel.com/) for production deployment
+- [Astro](https://astro.build/) and React for the frontend
+- [Sanity Content Lake and Studio](https://www.sanity.io/) for structured content and editing
+- [Leaflet](https://leafletjs.com/) and [OpenStreetMap](https://www.openstreetmap.org/) for the field map, report location picker, and connection board
+- [Vercel](https://vercel.com/) for deployment and server-side reporting routes
 
 ## Local development
 
-### Prerequisites
-
-- Node.js 22+
-- A Sanity account with access to project `en0s05um`, or your own Sanity project
-
-### Frontend
+Use Node.js **22.12 or newer**.
 
 ```bash
 cd frontend
@@ -59,14 +59,7 @@ npm install
 npm run dev
 ```
 
-The app runs at `http://localhost:4321`. For a different Sanity project, create `frontend/.env` with:
-
-```bash
-PUBLIC_SANITY_PROJECT_ID=your_project_id
-PUBLIC_SANITY_DATASET=your_dataset
-```
-
-### Sanity Studio
+The frontend runs at `http://localhost:4321`. To run the Sanity Studio separately:
 
 ```bash
 cd backend
@@ -74,29 +67,27 @@ npm install
 npm run dev
 ```
 
-The Studio exposes the `Creature`, `Region`, and `Sighting` schemas. Before deploying a frontend on a new domain, add that domain to the Sanity CORS origins.
+The read-only frontend client and the Studio default to project `en0s05um` and dataset `bestiary`. To submit reports locally, create `frontend/.env` with:
 
-## Production environment variables
-
-For the frontend deployment, configure these variables in Vercel:
-
-```bash
+```dotenv
 PUBLIC_SANITY_PROJECT_ID=en0s05um
 PUBLIC_SANITY_DATASET=bestiary
-SANITY_WRITE_TOKEN=your_write_token
+SANITY_WRITE_TOKEN=your_server_side_write_token
 ```
 
-Keep `SANITY_WRITE_TOKEN` private. It is used only by the server-side reporting flow and must never be exposed with a `PUBLIC_` prefix.
+The write token is used only by server-side API routes. Keep it private and never give it a `PUBLIC_` prefix. To use your own Sanity project, update the project ID and dataset in `frontend/src/lib/sanity.ts`, `backend/sanity.config.ts`, and `backend/sanity.cli.ts`, then set the matching values in `frontend/.env`. Add your frontend origin to the project's Sanity CORS settings.
+
+The backend seed and maintenance scripts use `backend/.env` with `SANITY_PROJECT_ID`, `SANITY_DATASET`, and `SANITY_WRITE_TOKEN`. The archive-label migration is in `backend/scripts/translate-archive-labels.mjs`; it previews changes by default and applies them only with `--apply`.
 
 ## Project structure
 
 ```text
-frontend/              Astro app, report form, map and dossier UI
-frontend/src/components/BestiaryMap.tsx
-                         Real-time Leaflet map and creature dossiers
-backend/               Sanity Studio and content schemas
-backend/schemaTypes/   Creature, Region, and Sighting document models
-backend/scripts/       Seed data and illustration synchronization utilities
+frontend/src/components/   Map, entity archive, connection board, shared header, and report form
+frontend/src/pages/        Public routes and server-side report APIs
+frontend/src/lib/          Sanity clients and credibility scoring
+frontend/public/audio/     Optional archive music
+backend/schemaTypes/       Creature, region, and sighting schemas
+backend/scripts/           Seed and archive maintenance scripts
 ```
 
 ## Build
@@ -106,12 +97,4 @@ cd frontend
 npm run build
 ```
 
-The production build is deployed to Vercel at [apex-bestiary.vercel.app](https://apex-bestiary.vercel.app/map).
-
-## Notes for reviewers
-
-The public map is the best starting point: select any signal or use **Random transmission**. To assess the structured content, inspect the Sanity schemas in `backend/schemaTypes`, where the relations and editorial fields are defined explicitly.
-
----
-
-Created as an experiment in folklore, structured content, and the feeling that a map might be looking back at you.
+For a quick tour, start on the field map and use **Random transmission**, then open the linked entity profile to inspect its timeline and connection board.
