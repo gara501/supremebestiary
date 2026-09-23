@@ -17,6 +17,7 @@ interface EnrichedSighting {
     mimeType?: string
   } | null
   creature: {
+    _id: string
     name: string
     threatLevel: string
     physicalDescription?: string
@@ -35,7 +36,7 @@ const SIGHTING_PROJECTION = `{
   status,
   freeformDescription,
   "testimonyAudio": testimonyAudio.asset->{url, originalFilename, mimeType},
-  "creature": creature->{name, threatLevel, physicalDescription, distinctiveTraits, folkloreOrigin, "imageUrl": archiveIllustration.asset->url},
+  "creature": creature->{_id, name, threatLevel, physicalDescription, distinctiveTraits, folkloreOrigin, "imageUrl": archiveIllustration.asset->url},
   "region": region->{name, country, folkloreHistory}
 }`
 
@@ -380,6 +381,9 @@ export default function BestiaryMap() {
         {isScanning ? 'Triangulating…' : 'Locate signals'}
       </button>
       <div className="bestiary-map__explore-controls">
+        <a className="bestiary-map__archive-link" href="/bestiary">
+          <span aria-hidden="true">✦</span> Open the bestiary <span aria-hidden="true">↗</span>
+        </a>
         <a className="bestiary-map__report-link" href="/report">
           <span aria-hidden="true">✎</span> Report an encounter
         </a>
@@ -441,6 +445,7 @@ export default function BestiaryMap() {
               </section>
             )}
             {selectedSighting.creature?.folkloreOrigin && <p className="creature-dossier__origin">Archive note: {selectedSighting.creature.folkloreOrigin}</p>}
+            {selectedSighting.creature?._id && <a className="creature-dossier__archive-link" href={`/bestiary#${encodeURIComponent(selectedSighting.creature._id)}`}>Explore complete entity profile <span aria-hidden="true">↗</span></a>}
           </div>
         </aside>
       )}
