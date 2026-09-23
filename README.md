@@ -12,6 +12,7 @@ Built for the [Sanity Challenge — Path Two: Vibe-code Something Strange](https
 
 - Explore a dark field map with animated signals for sightings around the world.
 - Open a creature dossier directly from a signal, including the archive illustration and folklore context.
+- Browse the entity archive at `/bestiary`, inspect each creature's sighting timeline, compare reported traits with canonical signs, and jump to an exact signal on the map.
 - Use **Random transmission** to jump into an unexpected case file.
 - Turn on the optional **Field receiver** for a subtle, browser-generated ambient signal — no autoplay and no external audio file required.
 - Submit a new sighting from the public report form.

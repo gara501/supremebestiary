@@ -14,10 +14,28 @@ interface Creature {
   regions?: {name: string; country?: string}[]
 }
 
+interface FieldSighting {
+  _id: string
+  creatureId: string
+  date?: string
+  credibilityIndex?: number | null
+  status?: string
+  observedTraits?: string[]
+  freeformDescription?: string
+  location?: {lat: number; lng: number}
+  region?: {name: string; country?: string} | null
+}
+
 const CREATURE_QUERY = `*[_type == "creature"] | order(name asc) {
   _id, name, regionalNames, physicalDescription, distinctiveTraits, folkloreOrigin, threatLevel,
   "imageUrl": archiveIllustration.asset->url,
   "regions": regions[]->{name, country}
+}`
+
+const SIGHTINGS_QUERY = `*[_type == "sighting" && defined(creature._ref)] | order(date desc) {
+  _id, "creatureId": creature._ref, date, credibilityIndex, status,
+  observedTraits, freeformDescription, location,
+  "region": region->{name, country}
 }`
 
 const THREATS: Record<string, {label: string; className: string; description: string}> = {
@@ -39,9 +57,22 @@ function getHashId() {
   try { return decodeURIComponent(window.location.hash.slice(1)) } catch { return '' }
 }
 
+function formatSightingDate(value?: string) {
+  if (!value) return 'Date unrecorded'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? 'Date unrecorded' : new Intl.DateTimeFormat('en', {day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC'}).format(date)
+}
+
+function normalizeTrait(value: string) {
+  return value.trim().toLocaleLowerCase()
+}
+
 export default function CreatureArchive() {
   const [creatures, setCreatures] = useState<Creature[]>([])
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [sightings, setSightings] = useState<FieldSighting[]>([])
+  const [sightingsStatus, setSightingsStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [selectedSightingId, setSelectedSightingId] = useState('')
   const [selectedId, setSelectedId] = useState('')
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
@@ -53,19 +84,54 @@ export default function CreatureArchive() {
     let active = true
     async function load() {
       setStatus('loading')
-      try {
-        const result = await sanityClient.fetch<Creature[]>(CREATURE_QUERY)
-        if (!active) return
-        setCreatures(result)
-        setSelectedId(result.find((creature) => creature._id === getHashId())?._id ?? result[0]?._id ?? '')
+      setSightingsStatus('loading')
+      const [creatureResult, sightingResult] = await Promise.allSettled([
+        sanityClient.fetch<Creature[]>(CREATURE_QUERY),
+        sanityClient.fetch<FieldSighting[]>(SIGHTINGS_QUERY),
+      ])
+      if (!active) return
+      if (creatureResult.status === 'fulfilled') {
+        setCreatures(creatureResult.value)
+        setSelectedId(creatureResult.value.find((creature) => creature._id === getHashId())?._id ?? creatureResult.value[0]?._id ?? '')
         setStatus('ready')
-      } catch (error) {
-        console.error('Unable to load the entity archive:', error)
-        if (active) setStatus('error')
+      } else {
+        console.error('Unable to load the entity archive:', creatureResult.reason)
+        setStatus('error')
+      }
+      if (sightingResult.status === 'fulfilled') {
+        setSightings(sightingResult.value)
+        setSightingsStatus('ready')
+      } else {
+        console.error('Unable to load field reports:', sightingResult.reason)
+        setSightingsStatus('error')
       }
     }
     load()
     return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    let requestVersion = 0
+    const subscription = sanityClient.listen('*[_type == "sighting"]', {}, {tag: 'bestiary-archive-live'}).subscribe({
+      next: async () => {
+        const version = ++requestVersion
+        try {
+          const latest = await sanityClient.fetch<FieldSighting[]>(SIGHTINGS_QUERY)
+          if (active && version === requestVersion) {
+            setSightings(latest)
+            setSightingsStatus('ready')
+          }
+        } catch (error) {
+          console.error('Unable to refresh field reports:', error)
+        }
+      },
+      error: (error) => console.error('Live field report feed error:', error),
+    })
+    return () => {
+      active = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
@@ -101,6 +167,14 @@ export default function CreatureArchive() {
   const selected = creatures.find((creature) => creature._id === selectedId) ?? creatures[0]
   const threat = THREATS[selected?.threatLevel ?? 'unknown'] ?? THREATS.unknown
   const selectedIndex = creatures.findIndex((creature) => creature._id === selected?._id)
+  const creatureSightings = useMemo(() => sightings.filter((sighting) => sighting.creatureId === selected?._id), [sightings, selected?._id])
+  const selectedSighting = creatureSightings.find((sighting) => sighting._id === selectedSightingId) ?? creatureSightings[0]
+  const canonicalTraits = selected?.distinctiveTraits ?? []
+  const observedTraits = selectedSighting?.observedTraits ?? []
+  const observedSet = new Set(observedTraits.map(normalizeTrait))
+  const canonicalSet = new Set(canonicalTraits.map(normalizeTrait))
+  const matchedCount = canonicalTraits.filter((trait) => observedSet.has(normalizeTrait(trait))).length
+  const unlistedObservations = observedTraits.filter((trait) => !canonicalSet.has(normalizeTrait(trait)))
 
   useEffect(() => {
     if (visible.length && !visible.some((creature) => creature._id === selectedId)) {
@@ -208,6 +282,35 @@ export default function CreatureArchive() {
               <section className="archive__detail-block"><span className="archive__section-number">01 /</span><div><h3>Identifying marks</h3><p>Canonical traits recorded in the archive</p><ul className="archive__traits">{selected.distinctiveTraits?.length ? selected.distinctiveTraits.map((trait, index) => <li key={trait}><span>{String(index + 1).padStart(2, '0')}</span>{trait}</li>) : <li><span>—</span>Awaiting field confirmation</li>}</ul></div></section>
               <section className="archive__detail-block"><span className="archive__section-number">02 /</span><div><h3>Origin & folklore</h3><p>Accounts preserved across generations</p><blockquote>{selected.folkloreOrigin ?? 'No origin account has been filed for this entity.'}</blockquote><div className="archive__classification"><span>ARCHIVE CLASSIFICATION</span><strong>{threat.label}</strong></div></div></section>
             </div>
+            <section className="archive__investigation" aria-labelledby="investigation-title">
+              <div className="archive__investigation-heading">
+                <div><span className="archive__section-number">03 / FIELD INTELLIGENCE</span><h3 id="investigation-title">A trail of sightings</h3><p>Filed encounters associated with this entity, newest first.</p></div>
+                <span className="archive__report-count">{String(creatureSightings.length).padStart(2, '0')} REPORT{creatureSightings.length === 1 ? '' : 'S'}</span>
+              </div>
+              {sightingsStatus === 'loading' && <p className="archive__reports-message">Recovering field reports…</p>}
+              {sightingsStatus === 'error' && <p className="archive__reports-message">Field reports are temporarily unavailable. The entity profile remains accessible.</p>}
+              {sightingsStatus === 'ready' && creatureSightings.length === 0 && <div className="archive__reports-empty"><span aria-hidden="true">◎</span><p>No sightings have been filed for this entity yet.</p><a href="/report">Submit a field report ↗</a></div>}
+              {selectedSighting && <div className="archive__evidence-grid">
+                <div className="archive__timeline" aria-label={`Sightings of ${selected.name}`}>
+                  {creatureSightings.map((sighting, index) => <button key={sighting._id} type="button" className={`archive__timeline-item ${selectedSighting._id === sighting._id ? 'is-active' : ''}`} onClick={() => setSelectedSightingId(sighting._id)} aria-pressed={selectedSighting._id === sighting._id}>
+                    <span className="archive__timeline-node" aria-hidden="true" />
+                    <span className="archive__timeline-copy"><span className="archive__timeline-date">{formatSightingDate(sighting.date)} <small>REPORT {String(creatureSightings.length - index).padStart(2, '0')}</small></span><strong>{sighting.region?.name ?? 'Location unconfirmed'}</strong><span className="archive__timeline-excerpt">{sighting.freeformDescription || 'No witness account available.'}</span></span>
+                    <span className="archive__timeline-chevron" aria-hidden="true">↗</span>
+                  </button>)}
+                </div>
+                <div className="archive__evidence">
+                  <div className="archive__evidence-top"><span>SELECTED FIELD REPORT</span><span className={`archive__filing-status archive__filing-status--${selectedSighting.status ?? 'pending'}`}>{selectedSighting.status === 'verified' ? 'VERIFIED' : selectedSighting.status === 'dismissed' ? 'DISMISSED' : 'UNDER REVIEW'}</span></div>
+                  <div className="archive__evidence-meta"><div><span>RECORDED</span><strong>{formatSightingDate(selectedSighting.date)}</strong></div><div><span>REGION</span><strong>{selectedSighting.region?.name ?? 'Unconfirmed'}</strong></div><div><span>CREDIBILITY INDEX</span><strong className="archive__credibility">{selectedSighting.credibilityIndex == null ? 'PENDING' : `${Math.round(selectedSighting.credibilityIndex)} / 100`}</strong></div></div>
+                  <blockquote className="archive__witness-account">“{selectedSighting.freeformDescription ?? 'No witness account available.'}”</blockquote>
+                  <div className="archive__comparison"><div className="archive__comparison-heading"><span>04 / TRAIT COMPARISON</span><strong>{matchedCount} <small>/ {canonicalTraits.length}</small></strong></div><p>Canonical signs recorded in this report</p>
+                    <ul>{canonicalTraits.length ? canonicalTraits.map((trait) => <li key={trait} className={observedSet.has(normalizeTrait(trait)) ? 'is-matched' : ''}><span aria-hidden="true">{observedSet.has(normalizeTrait(trait)) ? '✓' : '—'}</span>{trait}<small>{observedSet.has(normalizeTrait(trait)) ? 'OBSERVED' : 'NOT REPORTED'}</small></li>) : <li>No canonical signs have been filed.</li>}</ul>
+                    {unlistedObservations.length > 0 && <div className="archive__unlisted"><span>ADDITIONAL OBSERVATIONS</span><p>{unlistedObservations.join(' · ')}</p></div>}
+                    <p className="archive__comparison-note">Trait comparison uses reported observations. The credibility index also includes witness, corroboration and regional context.</p>
+                  </div>
+                  {selectedSighting.location && <a className="archive__map-link" href={`/map?sighting=${encodeURIComponent(selectedSighting._id)}`}><span>Locate this signal on the field map</span><span aria-hidden="true">↗</span></a>}
+                </div>
+              </div>}
+            </section>
             <div className="archive__profile-bottom"><span>END OF FILE — {selected.name.toUpperCase()}</span><div><button type="button" onClick={() => stepCreature(-1)} aria-label="Previous entity">←</button><button type="button" onClick={() => stepCreature(1)} aria-label="Next entity">→</button></div></div>
           </> : <div className="archive__empty"><span>✦</span><h2>{status === 'loading' ? 'Opening the archive…' : 'No case files available'}</h2><p>{status === 'error' ? 'Please check the archive connection and try again.' : 'The next field report may reveal what is hidden.'}</p></div>}
         </article>

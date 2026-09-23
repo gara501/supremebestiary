@@ -210,21 +210,23 @@ export default function BestiaryMap() {
 
     async function loadInitialSightings() {
       try {
-        const reportId = new URLSearchParams(window.location.search).get('report')
-        const filedReportPromise: Promise<EnrichedSighting | null> = reportId
-          ? sanityClient.fetch(`*[_id == $id][0] ${SIGHTING_PROJECTION}`, {id: reportId})
+        const params = new URLSearchParams(window.location.search)
+        const reportId = params.get('report')
+        const targetId = reportId ?? params.get('sighting')
+        const targetSightingPromise: Promise<EnrichedSighting | null> = targetId
+          ? sanityClient.fetch(`*[_type == "sighting" && _id == $id][0] ${SIGHTING_PROJECTION}`, {id: targetId})
           : Promise.resolve(null)
-        const [sightings, filedReport] = await Promise.all([
+        const [sightings, targetSighting] = await Promise.all([
           sanityClient.fetch<EnrichedSighting[]>(`*[_type == "sighting" && defined(location)] ${SIGHTING_PROJECTION}`),
-          filedReportPromise,
+          targetSightingPromise,
         ])
         if (!isMounted) return
         console.log(`[BestiaryMap] loaded ${sightings.length} sightings`, sightings)
         sightings.forEach(upsertMarker)
-        if (filedReport?.location) {
-          upsertMarker(filedReport)
-          setReceivedSightingId(filedReport._id)
-          window.setTimeout(() => focusSighting(filedReport), 180)
+        if (targetSighting?.location) {
+          upsertMarker(targetSighting)
+          if (reportId) setReceivedSightingId(targetSighting._id)
+          window.setTimeout(() => focusSighting(targetSighting), 180)
         }
         setSightingCount(sightings.length)
         setConnectionStatus('live')
