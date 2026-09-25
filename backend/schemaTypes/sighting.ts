@@ -24,8 +24,19 @@ export default defineType({
       title: 'Exact location',
       type: 'geopoint',
       description:
-        'Exact point of the sighting, used for the real-time map and to calculate proximity to other reports.',
+        'Reported point, locality, or approximate regional center. Check location precision below before interpreting map placement.',
       validation: (Rule) => Rule.required(),
+    }),
+    defineField({
+      name: 'locationPrecision',
+      title: 'Location precision',
+      type: 'string',
+      options: {list: [
+        {title: 'Exact place stated in source', value: 'exact'},
+        {title: 'Locality or landmark; point is approximate', value: 'locality'},
+        {title: 'Broad region only; point is a regional center', value: 'region'},
+      ]},
+      initialValue: 'region',
     }),
 
     // --- Witness ---
@@ -84,6 +95,17 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'dateBasis',
+      title: 'Date basis',
+      type: 'string',
+      options: {list: [
+        {title: 'Event date stated in source', value: 'event'},
+        {title: 'Approximate event period', value: 'approximate_event'},
+        {title: 'Date the account was collected or published', value: 'record_date'},
+      ]},
+      initialValue: 'event',
+    }),
+    defineField({
       name: 'timeOfDay',
       title: 'Time of day',
       type: 'string',
@@ -94,6 +116,7 @@ export default defineType({
           {title: 'Dusk', value: 'dusk'},
           {title: 'Night', value: 'night'},
           {title: 'Late night / small hours', value: 'late_night'},
+          {title: 'Not stated', value: 'unspecified'},
         ],
       },
       validation: (Rule) => Rule.required(),
@@ -103,9 +126,23 @@ export default defineType({
       name: 'freeformDescription',
       title: 'Witness account',
       type: 'text',
-      description: 'The original, unedited text of what the witness reports having seen.',
+      description: 'Source-based summary of the account. Preserve whether it is eyewitness testimony, hearsay, folklore, or a historical text.',
       validation: (Rule) => Rule.required(),
     }),
+    defineField({
+      name: 'accountType',
+      title: 'Account type',
+      type: 'string',
+      options: {list: [
+        {title: 'Eyewitness claim', value: 'eyewitness'},
+        {title: 'Contemporary report of a claim', value: 'press_report'},
+        {title: 'Oral folklore / collected narrative', value: 'folklore'},
+        {title: 'Historical or religious text', value: 'historical_text'},
+        {title: 'Clinical or case-history account', value: 'case_history'},
+      ]},
+    }),
+    defineField({name: 'sourceTitle', title: 'Source title', type: 'string'}),
+    defineField({name: 'sourceUrl', title: 'Source URL', type: 'url'}),
 
     defineField({
       name: 'testimonyAudio',
