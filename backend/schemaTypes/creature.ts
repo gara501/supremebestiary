@@ -6,6 +6,13 @@ export default defineType({
   type: 'document',
   fields: [
     defineField({
+      name: 'importSourceId',
+      title: 'Import source ID',
+      type: 'string',
+      readOnly: true,
+      hidden: true,
+    }),
+    defineField({
       name: 'name',
       title: 'Canonical name',
       type: 'string',

@@ -55,32 +55,35 @@ const EXTRA_REGIONS = [
   {id:'region-safed',name:'Safed, Galilee',country:'Israel',lat:32.964,lng:35.496},
 ]
 
-const creatures = await client.fetch('*[_type == "creature"]{_id,name}')
-const regions = await client.fetch('*[_type == "region"]{_id,name,country,centroid}')
-const creatureByKey = new Map(creatures.map((c) => [c._id.replace(/^creature\./, ''), c]))
-const regionIds = new Set(regions.map((r) => r._id))
+const creatures = await client.fetch('*[_type == "creature" && !(_id in path("drafts.**"))]{_id,importSourceId,name}')
+const regions = await client.fetch('*[_type == "region" && !(_id in path("drafts.**"))]{_id,importSourceId,name,country,centroid}')
+const creatureByKey = new Map(creatures.map((c) => [(c.importSourceId ?? c._id).replace(/^creature\./, ''), c]))
+const regionByKey = new Map(regions.map((r) => [r.importSourceId ?? r._id, r._id]))
 const missingCreatures = records.filter((r) => !creatureByKey.has(r.id))
 if (missingCreatures.length) throw new Error(`Creature documents missing: ${missingCreatures.map((r) => r.id).join(', ')}`)
 
 for (const r of EXTRA_REGIONS) {
-  if (!regionIds.has(r.id)) {
-    await client.createIfNotExists({_id:r.id,_type:'region',name:r.name,country:r.country,centroid:{_type:'geopoint',lat:r.lat,lng:r.lng},folkloreHistory:'Contextual location used by source-linked testimony or folklore record; map placement precision is noted on each sighting.',centuriesOfTradition:0})
+  if (!regionByKey.has(r.id)) {
+    const createdRegion = await client.create({importSourceId:r.id,_type:'region',name:r.name,country:r.country,centroid:{_type:'geopoint',lat:r.lat,lng:r.lng},folkloreHistory:'Contextual location used by source-linked testimony or folklore record; map placement precision is noted on each sighting.',centuriesOfTradition:0})
+    regionByKey.set(r.id, createdRegion._id)
   }
 }
 
-const existing = await client.fetch('*[_type == "sighting" && _id in $ids]._id', {ids:records.map((r) => `sighting.source-${r.id}`)})
-const existingIds = new Set(existing)
+const missingRegions = records.filter(r => !regionByKey.has(r.region))
+if (missingRegions.length) throw new Error(`Sighting regions missing: ${missingRegions.map(r => r.region).join(', ')}`)
+const existing = await client.fetch('*[_type == "sighting" && !(_id in path("drafts.**")) && (_id in $ids || importSourceId in $ids)]{_id,importSourceId}', {ids:records.map((r) => `sighting.source-${r.id}`)})
+const existingIds = new Set(existing.map(doc => doc.importSourceId ?? doc._id))
 let created = 0
 for (const r of records) {
-  const _id = `sighting.source-${r.id}`
-  if (existingIds.has(_id)) continue
+  const importSourceId = `sighting.source-${r.id}`
+  if (existingIds.has(importSourceId)) continue
   const witness = { _type:'object', anonymous:!r.witnesses.length, baseCredibility:r.cred, witnessState:'unspecified' }
   if (r.witnesses.length === 1) { witness.name = r.witnesses[0]; witness.anonymous = false }
   else if (r.witnesses.length > 1) { witness.name = r.witnesses.join(', '); witness.anonymous = false }
-  await client.create({_id,_type:'sighting',creature:{_type:'reference',_ref:creatureByKey.get(r.id)._id},region:{_type:'reference',_ref:r.region},location:{_type:'geopoint',lat:r.lat,lng:r.lng},locationPrecision:r.precision,witness,date:new Date(`${r.date}T12:00:00.000Z`).toISOString(),dateBasis:r.basis,timeOfDay:r.time,freeformDescription:r.text,accountType:r.type,sourceTitle:r.source,sourceUrl:r.url,observedTraits:r.traits,status:'pending'})
+  await client.create({importSourceId,_type:'sighting',creature:{_type:'reference',_ref:creatureByKey.get(r.id)._id},region:{_type:'reference',_ref:regionByKey.get(r.region)},location:{_type:'geopoint',lat:r.lat,lng:r.lng},locationPrecision:r.precision,witness,date:new Date(`${r.date}T12:00:00.000Z`).toISOString(),dateBasis:r.basis,timeOfDay:r.time,freeformDescription:r.text,accountType:r.type,sourceTitle:r.source,sourceUrl:r.url,observedTraits:r.traits,status:'pending'})
   created++
 }
-console.log(`Created ${created} source-linked sighting records; ${records.length-created} stable IDs already existed.`)
+console.log(`Created ${created} source-linked sighting records; ${records.length-created} import sources already existed.`)
 
 
 

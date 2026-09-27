@@ -1,6 +1,6 @@
 // Import the missing creature and entity records from the two supplied compendia.
 // Run from backend with SANITY_PROJECT_ID, SANITY_DATASET, and SANITY_WRITE_TOKEN
-// in .env. Documents use stable IDs; existing records are left untouched.
+// in .env. Documents use generated IDs and stable importSourceId metadata.
 
 import 'dotenv/config'
 import {createClient} from '@sanity/client'
@@ -218,8 +218,10 @@ const CREATURES = [
 ]
 
 async function ensureRegion(region) {
-  await client.createIfNotExists({
-    _id: region.id,
+  const existing = await client.fetch('*[_type == "region" && !(_id in path("drafts.**")) && (_id == $id || importSourceId == $id)][0]._id', {id: region.id})
+  if (existing) return
+  await client.create({
+    importSourceId: region.id,
     _type: 'region',
     name: region.name,
     country: region.country,
@@ -248,9 +250,9 @@ async function seed() {
   for (const region of REGIONS) await ensureRegion(region)
 
   for (const creature of CREATURES) {
-    const _id = `creature.${creature.key}`
-    const existing = await client.fetch('*[_type == "creature" && (_id == $id || name == $name)][0]{_id,name}', {
-      id: _id,
+    const importSourceId = `creature.${creature.key}`
+    const existing = await client.fetch('*[_type == "creature" && !(_id in path("drafts.**")) && (_id == $id || importSourceId == $id || name == $name)][0]{_id,name}', {
+      id: importSourceId,
       name: creature.name,
     })
     if (existing) {
@@ -259,11 +261,16 @@ async function seed() {
     }
 
     const regionDocs = creature.regionIds.length
-      ? await client.fetch('*[_type == "region" && _id in $ids]{_id}', {ids: creature.regionIds})
+      ? await client.fetch('*[_type == "region" && !(_id in path("drafts.**")) && (_id in $ids || importSourceId in $ids)]{_id,importSourceId}', {ids: creature.regionIds})
       : []
+    for (const source of creature.regionIds) {
+      if (regionDocs.filter(region => region._id === source || region.importSourceId === source).length !== 1) {
+        throw new Error(`Missing or ambiguous region: ${source}`)
+      }
+    }
     const assetId = await uploadImageIfPresent(creature.imageFile)
     const doc = {
-      _id,
+      importSourceId,
       _type: 'creature',
       name: creature.name,
       regionalNames: creature.regionalNames,
